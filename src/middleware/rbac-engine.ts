@@ -3,7 +3,7 @@ import { roles, permissions, rolePermissions, userRoles, menuPermissions, dataSc
 import { eq, inArray } from 'drizzle-orm';
 
 // In-memory cache for RBAC
-let rbacCache: {
+export let rbacCache: {
   userPermissions: Record<string, string[]>; // userId -> list of permission names (e.g. VIEW_DASHBOARD)
   userRolesList: Record<string, string[]>; // userId -> list of role names
   userMenus: Record<string, string[]>; // userId -> list of menu names

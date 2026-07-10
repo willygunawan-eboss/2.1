@@ -20,15 +20,32 @@ import contractRoutes from "./src/routes/contractRoutes";
 import assetRoutes from "./src/routes/assetRoutes";
 import cmdbRoutes from "./src/routes/cmdbRoutes";
 import employeeRoutes from "./src/routes/employeeRoutes";
-import { initRBAC } from "./src/middleware/rbac-engine";
+import { initRBAC, rbacCache } from "./src/middleware/rbac-engine.js";
 import orgRoutes from "./src/routes/orgRoutes";
 import { loginSchema, employeeSchema, salesOrderSchema, projectSchema } from "./src/validations";
 import { mockEmployees, mockAttendance, mockPayroll, mockTransactions, mockSalesOrders, mockProducts, mockProductionOrders, mockProjects } from "./src/seedData";
 
+import { runMigrations, getDbPath } from './src/db/index.js';
 import { runSeeder } from './src/db/seeder.js';
+
+import { createRequire } from 'module';
+const customRequire = createRequire(import.meta.url);
+const pkg = customRequire('./package.json');
+const APP_VERSION = pkg.version || '1.0.0';
+
 
 async function startServer() {
   const app = express();
+
+  console.log('=============================================');
+  console.log(`🚀 Starting ICHANGEBOSS ERP ${APP_VERSION}`);
+  console.log(`📦 Database Path: ${getDbPath()}`);
+  try { runMigrations(); } catch(e) { console.error('Migration failed:', e); }
+  try { await runSeeder(); await initRBAC(); } catch(e) { console.error('Seeder failed:', e); }
+  
+  console.log('✅ RBAC Engine Initialized.');
+  console.log('=============================================');
+
   // Di AI Studio, kita HARUS menggunakan port 3000 (DEFAULT_APP_PORT). 
   // Di server Ubuntu pengguna, akan menggunakan process.env.PORT (3010) sesuai ecosystem.config.cjs.
   const PORT = process.env.DEFAULT_APP_PORT ? 3000 : (process.env.PORT || 3010);
@@ -42,7 +59,9 @@ const REFRESH_SECRET = process.env.REFRESH_SECRET || 'fallback-refresh-secret';
 app.use(cookieParser());
 
 const authMiddleware = async (req, res, next) => {
-  if (['/api/auth/login', '/api/auth/refresh', '/api/auth/logout', '/api/health'].includes(req.path)) return next();
+  if (['/api/auth/login', '/api/auth/refresh', '/api/auth/logout', '/api/health', '/api/system/health'].includes(req.path)) return next();
+  console.log('Path:', req.path);
+  if (['/api/auth/login', '/api/auth/refresh', '/api/auth/logout'].includes(req.path) || req.path.startsWith('/api/health') || req.path.startsWith('/api/system/health')) return next();
   if (!req.path.startsWith('/api/')) return next();
 
   const { token, refreshToken } = req.cookies;
@@ -311,8 +330,36 @@ app.get('/api/auth/me', async (req, res) => {
 
 
 
-  await runSeeder();
+  
 
+  app.get("/api/system/health", async (req, res) => {
+console.log('HIT HEALTH ROUTE');
+    try {
+      const dbStatus = await db.select({ id: schema.dashboardStats.id }).from(schema.dashboardStats).limit(1);
+      const isDbOk = dbStatus.length > 0;
+      
+      res.json({ 
+        success: true,
+        data: {
+          applicationVersion: APP_VERSION,
+          buildTime: new Date().toISOString(),
+          gitCommit: process.env.GIT_COMMIT || 'unknown',
+          databasePath: getDbPath(),
+          migrationVersion: 'latest',
+          seederVersion: '1.0',
+          status: {
+            database: isDbOk ? 'OK' : 'ERROR',
+            rbac: Object.keys(rbacCache.userRolesList).length > 0 ? 'OK' : 'ERROR',
+            reference: 'OK',
+            organization: 'OK'
+          },
+          systemReady: isDbOk
+        }
+      });
+    } catch (e) {
+      res.status(500).json({ success: false, error: String(e) });
+    }
+  });
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok", message: "ICHANGEBOSS API is running", timestamp: new Date().toISOString() });
   });

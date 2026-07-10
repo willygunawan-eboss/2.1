@@ -1,10 +1,12 @@
 import type { Config } from 'drizzle-kit';
+import * as dotenv from 'dotenv';
+dotenv.config();
 
 export default {
   schema: './src/db/schema.ts',
   out: './drizzle',
   dialect: 'sqlite',
   dbCredentials: {
-    url: './data/erp.db',
+    url: process.env.DATABASE_URL || './data/erp.db',
   },
 } satisfies Config;

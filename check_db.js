@@ -1,6 +1,4 @@
-import { db } from './src/db/index.js';
-import * as schema from './src/db/schema.js';
-(async () => {
-  const tickets = await db.select().from(schema.tickets);
-  console.log("Tickets:", tickets.map(t => t.ticketNumber));
-})();
+import Database from 'better-sqlite3';
+const db = new Database('./data/erp.db');
+console.log('dashboard_stats:', db.prepare('SELECT * FROM dashboard_stats').all());
+console.log('users:', db.prepare('SELECT id, username FROM users').all());
