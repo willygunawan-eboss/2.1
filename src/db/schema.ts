@@ -121,6 +121,7 @@ export const employees = sqliteTable('employees', {
   branchId: text('branch_id').references(() => branches.id),
   departmentId: text('department_id').references(() => departments.id),
   positionId: text('position_id').references(() => positions.id),
+  userId: text('user_id').references(() => users.id),
   status: text('status').notNull().default('Active'),
   joinDate: text('join_date'),
   avatar: text('avatar'),

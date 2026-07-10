@@ -336,28 +336,146 @@ app.get('/api/auth/me', async (req, res) => {
 
   
 
-  app.get("/api/system/health", async (req, res) => {
-console.log('HIT HEALTH ROUTE');
+  
+  app.post("/api/system/bootstrap", async (req, res) => {
     try {
-      const dbStatus = await db.select({ id: schema.dashboardStats.id }).from(schema.dashboardStats).limit(1);
-      const isDbOk = dbStatus.length > 0;
+      const { step, data } = req.body;
+      const adminUserId = req.user?.id;
       
+      if (step === 1) { // Company
+        const compId = crypto.randomUUID();
+        await db.insert(schema.companies).values({ id: compId, code: data.code, name: data.name, email: data.email, createdBy: 'admin' });
+        return res.json({ success: true, data: { id: compId } });
+      }
+      
+      if (step === 2) { // Branch
+        let comp = await db.select().from(schema.companies).limit(1);
+        if (!comp.length) return res.status(400).json({ success: false, message: 'Company not found' });
+        const branchId = crypto.randomUUID();
+        await db.insert(schema.branches).values({ id: branchId, companyId: comp[0].id, code: data.code, name: data.name, createdBy: 'admin' });
+        return res.json({ success: true, data: { id: branchId } });
+      }
+      
+      if (step === 3) { // Department
+        let comp = await db.select().from(schema.companies).limit(1);
+        let div = await db.select().from(schema.divisions).limit(1);
+        let divId = div[0]?.id;
+        if (!divId) {
+          divId = crypto.randomUUID();
+          await db.insert(schema.divisions).values({ id: divId, companyId: comp[0].id, code: 'DIV-01', name: 'Main Division', createdBy: 'admin' });
+        }
+        const deptId = crypto.randomUUID();
+        await db.insert(schema.departments).values({ id: deptId, divisionId: divId, code: data.code, name: data.name, createdBy: 'admin' });
+        return res.json({ success: true, data: { id: deptId } });
+      }
+      
+      if (step === 4) { // Position
+        let dept = await db.select().from(schema.departments).limit(1);
+        let jg = await db.select().from(schema.jobGrades).limit(1);
+        let jgId = jg[0]?.id;
+        if (!jgId) {
+          jgId = crypto.randomUUID();
+          await db.insert(schema.jobGrades).values({ id: jgId, code: 'JG-1', name: 'Staff', level: 1 });
+        }
+        const posId = crypto.randomUUID();
+        await db.insert(schema.positions).values({ id: posId, departmentId: dept[0].id, jobGradeId: jgId, code: data.code, name: data.name, createdBy: 'admin' });
+        return res.json({ success: true, data: { id: posId } });
+      }
+      
+      if (step === 5) { // Employee
+        let comp = await db.select().from(schema.companies).limit(1);
+        let branch = await db.select().from(schema.branches).limit(1);
+        let dept = await db.select().from(schema.departments).limit(1);
+        let pos = await db.select().from(schema.positions).limit(1);
+        const empId = crypto.randomUUID();
+        await db.insert(schema.employees).values({
+          id: empId,
+          employeeNumber: data.employeeNumber,
+          name: data.name,
+          email: data.email,
+          companyId: comp[0].id,
+          branchId: branch[0].id,
+          departmentId: dept[0].id,
+          positionId: pos[0].id,
+          userId: adminUserId, // Link to currently logged in admin user!
+          createdBy: 'admin'
+        });
+        
+        // Also let's setup Reference Engine minimums if not exist
+        let refGroups = await db.select().from(schema.referenceGroups).limit(1);
+        if (refGroups.length === 0) {
+           const refGroupId = crypto.randomUUID();
+           await db.insert(schema.referenceGroups).values({ id: refGroupId, code: 'CURRENCY', name: 'Currency', isSystem: true });
+           await db.insert(schema.referenceValues).values({ id: crypto.randomUUID(), groupId: refGroupId, code: 'IDR', value: 'Indonesian Rupiah', isSystem: true });
+           await db.insert(schema.referenceValues).values({ id: crypto.randomUUID(), groupId: refGroupId, code: 'USD', value: 'US Dollar', isSystem: true });
+        }
+
+        return res.json({ success: true, data: { id: empId } });
+      }
+
+      return res.status(400).json({ success: false, message: 'Invalid step' });
+    } catch (e) {
+      console.error('Bootstrap Error:', e);
+      res.status(500).json({ success: false, message: String(e) });
+    }
+  });
+
+  app.get("/api/system/health", async (req, res) => {
+    try {
+      const companies = await db.select({ id: schema.companies.id }).from(schema.companies).limit(1);
+      const branches = await db.select({ id: schema.branches.id }).from(schema.branches).limit(1);
+      const departments = await db.select({ id: schema.departments.id }).from(schema.departments).limit(1);
+      const positions = await db.select({ id: schema.positions.id }).from(schema.positions).limit(1);
+      const roles = await db.select({ id: schema.roles.id }).from(schema.roles).limit(1);
+      const refs = await db.select({ id: schema.referenceGroups.id }).from(schema.referenceGroups).limit(1);
+      const employeesCount = await db.select({ id: schema.employees.id }).from(schema.employees).limit(1);
+      
+      const hasCompany = companies.length > 0;
+      const hasBranch = branches.length > 0;
+      const hasDepartment = departments.length > 0;
+      const hasPosition = positions.length > 0;
+      const hasRole = roles.length > 0;
+      const hasRef = refs.length > 0;
+      const hasEmployee = employeesCount.length > 0;
+      
+      const orgReady = hasCompany && hasBranch && hasDepartment;
+      const hrReady = hasPosition && hasEmployee;
+      const refReady = hasRef;
+      const rbacReady = hasRole;
+      
+      const isSystemReady = orgReady && hrReady && refReady && rbacReady;
+      
+      let progress = 0;
+      if (hasCompany) progress += 15;
+      if (hasBranch) progress += 15;
+      if (hasDepartment) progress += 15;
+      if (hasPosition) progress += 15;
+      if (hasRole) progress += 10;
+      if (hasRef) progress += 10;
+      if (hasEmployee) progress += 20;
+
       res.json({ 
         success: true,
         data: {
           applicationVersion: APP_VERSION,
           buildTime: new Date().toISOString(),
-          gitCommit: process.env.GIT_COMMIT || 'unknown',
-          databasePath: getDbPath(),
-          migrationVersion: 'latest',
-          seederVersion: '1.0',
           status: {
-            database: isDbOk ? 'OK' : 'ERROR',
-            rbac: Object.keys(rbacCache.userRolesList).length > 0 ? 'OK' : 'ERROR',
-            reference: 'OK',
-            organization: 'OK'
+            organization: orgReady ? 'OK' : 'PENDING',
+            reference: refReady ? 'OK' : 'PENDING',
+            rbac: rbacReady ? 'OK' : 'PENDING',
+            hr: hrReady ? 'OK' : 'PENDING'
           },
-          systemReady: isDbOk
+          details: {
+            hasCompany,
+            hasBranch,
+            hasDepartment,
+            hasPosition,
+            hasRole,
+            hasRef,
+            hasEmployee
+          },
+          progress,
+          systemReady: isSystemReady
         }
       });
     } catch (e) {

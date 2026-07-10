@@ -18,11 +18,13 @@ import { BIView } from './components/BIView';
 import { DMSView } from './components/DMSView';
 import { KBView } from './components/KBView';
 import { LoginView } from './components/LoginView';
+import { BootstrapWizard } from './components/BootstrapWizard';
 import { RBACProvider, useRBAC } from './contexts/RBACContext';
 import { ModuleId } from './types';
 
 function MainApp() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [systemReady, setSystemReady] = useState<boolean>(true);
   const [isInitializing, setIsInitializing] = useState(true);
   const [activeModule, setActiveModule] = useState<ModuleId>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -37,6 +39,13 @@ function MainApp() {
           const data = await res.json();
           if (data.success) {
             setIsAuthenticated(true);
+            const healthRes = await fetch('/api/system/health');
+            if (healthRes.ok) {
+              const healthData = await healthRes.json();
+              if (healthData.success) {
+                setSystemReady(healthData.data.systemReady);
+              }
+            }
           } else {
             setIsAuthenticated(false);
           }
@@ -75,6 +84,10 @@ function MainApp() {
 
   if (!isAuthenticated) {
     return <LoginView onLogin={handleLogin} />;
+  }
+  
+  if (!systemReady) {
+    return <BootstrapWizard onComplete={() => setSystemReady(true)} />;
   }
 
   
