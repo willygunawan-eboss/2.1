@@ -1,0 +1,4 @@
+1. **API Standardization**: The legacy `createGetRoute` and `createPostRoute` in `server.ts` have been rewritten. All generic API routes now output the enterprise format: `{ success, message, data, meta: { total, errors } }`.
+2. **RBAC API Enforcement**: A backend middleware `requirePermission(moduleName, action)` was introduced and is now injected into all dynamic endpoints. This ensures that a valid JWT token alone cannot bypass module-level scopes.
+3. **DB Transactions for Multiple Operations**: Fixed `rbacRoutes.ts` multi-table deletes and inserts (e.g., `rolePermissions`, `userRoles`) to be wrapped in Drizzle `db.transaction()` to prevent data anomalies and orphan rows.
+4. **Zod Validation Structure**: Enhanced `createPostRoute` to accept Zod Schemas dynamically, halting the request and returning `400 Bad Request` if the frontend submits junk payloads before it ever touches SQLite.

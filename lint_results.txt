@@ -1,0 +1,24 @@
+
+> react-example@0.0.0 lint
+> tsc --noEmit
+
+src/components/AssetView.tsx(485,24): error TS2304: Cannot find name 'assetCategories'.
+src/components/AssetView.tsx(578,22): error TS2304: Cannot find name 'assetStatuses'.
+src/components/AssetView.tsx(643,24): error TS2304: Cannot find name 'assetCategories'.
+src/components/AssetView.tsx(734,22): error TS2304: Cannot find name 'assetStatuses'.
+src/components/DashboardView.tsx(74,32): error TS2304: Cannot find name 'useReferences'.
+src/components/FinanceView.tsx(11,47): error TS2304: Cannot find name 'useState'.
+src/components/InvoicingView.tsx(540,26): error TS2304: Cannot find name 'invoiceStatuses'.
+src/components/InvoicingView.tsx(617,34): error TS2304: Cannot find name 'taxTypes'.
+src/components/SalesView.tsx(7,31): error TS2304: Cannot find name 'useState'.
+src/components/SalesView.tsx(8,35): error TS2304: Cannot find name 'useState'.
+src/components/SalesView.tsx(9,37): error TS2304: Cannot find name 'useState'.
+src/components/SalesView.tsx(10,47): error TS2304: Cannot find name 'useState'.
+src/components/SalesView.tsx(11,33): error TS2304: Cannot find name 'useState'.
+src/components/SalesView.tsx(20,3): error TS2304: Cannot find name 'useEffect'.
+src/components/SalesView.tsx(161,45): error TS2304: Cannot find name 'useState'.
+src/components/SalesView.tsx(162,39): error TS2304: Cannot find name 'useState'.
+src/components/SettingsModal.tsx(114,20): error TS2304: Cannot find name 'languages'.
+src/components/SettingsModal.tsx(114,43): error TS2304: Cannot find name 'languages'.
+src/components/SettingsModal.tsx(125,20): error TS2304: Cannot find name 'timezones'.
+src/components/SettingsModal.tsx(125,43): error TS2304: Cannot find name 'timezones'.
