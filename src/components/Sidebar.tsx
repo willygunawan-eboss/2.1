@@ -74,6 +74,7 @@ export function Sidebar({ activeModule, onNavigate, isOpen = false, setIsOpen }:
       <div className="flex-1 overflow-y-auto py-2 px-3 custom-scrollbar relative z-10">
         <nav className="space-y-1">
           {navItems.map((item) => {
+            if (!hasMenu(item.id)) return null;
             const Icon = item.icon;
             const isActive = activeModule === item.id;
             return (

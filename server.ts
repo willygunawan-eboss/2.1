@@ -1,6 +1,7 @@
 import fs from "fs";
 import express from "express";
 import { requirePermission } from "./src/middleware/rbacMiddleware.js";
+import { getUserPermissions, getUserRoles } from "./src/middleware/rbac-engine.js";
 import crypto from "crypto";
 import path from "path";
 import { createServer as createViteServer } from "vite";
@@ -24,30 +25,7 @@ import orgRoutes from "./src/routes/orgRoutes";
 import { loginSchema, employeeSchema, salesOrderSchema, projectSchema } from "./src/validations";
 import { mockEmployees, mockAttendance, mockPayroll, mockTransactions, mockSalesOrders, mockProducts, mockProductionOrders, mockProjects } from "./src/seedData";
 
-async function seedDatabase() {
-  const existingStats = await db.select().from(schema.dashboardStats).where(eq(schema.dashboardStats.id, 'main'));
-  if (existingStats.length === 0) {
-    await db.insert(schema.dashboardStats).values({
-      id: 'main', activeEmployees: 1248, totalDepartments: 8, openTickets: 12, monthlyRevenue: 154000
-    });
-  }
-
-  // Mock data seeding removed as per requirement: "Jangan membuat mock data."
-
-    const usersCount = await db.select().from(schema.users);
-    if (usersCount.length === 0) {
-      const passwordHash = await bcrypt.hash('1234erP', 10);
-      await db.insert(schema.users).values({
-        id: 'U-01',
-        username: 'admin',
-        passwordHash,
-        name: 'Administrator',
-        email: 'admin@ichangeboss.com',
-        role: 'admin',
-        department: 'Management'
-      });
-    }
-}
+import { runSeeder } from './src/db/seeder.js';
 
 async function startServer() {
   const app = express();
@@ -102,6 +80,31 @@ const authMiddleware = async (req, res, next) => {
   res.status(401).json({ success: false, message: 'Token invalid' });
 };
 app.use(authMiddleware);
+
+app.get('/api/debug/me', async (req, res) => {
+  if (process.env.NODE_ENV !== 'development') {
+    return res.status(403).json({ success: false, message: 'Forbidden' });
+  }
+  const user = (req as any).user;
+  if (!user) return res.status(401).json({ success: false, message: 'Not authenticated' });
+  
+  const permissions = getUserPermissions(user.id);
+  const roles = getUserRoles(user.id);
+  const modules = [...new Set(permissions.map((p: string) => p.split('_')[1]?.toLowerCase()).filter(Boolean))];
+  const employee = await db.select().from(schema.employees).where(eq(schema.employees.userId, user.id));
+  
+  res.json({
+    success: true,
+    user,
+    employee: employee[0] || null,
+    role: roles.includes('SUPER_ADMIN') ? 'SUPER_ADMIN' : roles[0] || user.role,
+    permissions,
+    modules,
+    menu: getUserMenus(user.id),
+    accessibleRoutes: []
+  });
+});
+
 
 
 
@@ -282,16 +285,33 @@ app.post('/api/auth/logout', async (req, res) => {
   res.json({ success: true });
 });
 
-app.get('/api/auth/me', (req, res) => {
-  if ((req as any).user) return res.json({ success: true, user: (req as any).user });
-  res.status(401).json({ success: false, message: 'Not authenticated' });
+app.get('/api/auth/me', async (req, res) => {
+  const user = (req as any).user;
+  if (!user) return res.status(401).json({ success: false, message: 'Not authenticated' });
+  
+  // get permissions from rbac engine
+  const permissions = getUserPermissions(user.id);
+  const roles = getUserRoles(user.id);
+  const modules = [...new Set(permissions.map((p: string) => p.split('_')[1]?.toLowerCase()).filter(Boolean))];
+  
+  // attempt to fetch employee
+  const employee = await db.select().from(schema.employees).where(eq(schema.employees.userId, user.id)).get() || null;
+  
+  res.json({ 
+    success: true, 
+    user,
+    employee,
+    role: roles.includes('SUPER_ADMIN') ? 'SUPER_ADMIN' : roles[0] || user.role,
+    permissions,
+    modules
+  });
 });
 
 
 
 
 
-  await seedDatabase();
+  await runSeeder();
 
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok", message: "ICHANGEBOSS API is running", timestamp: new Date().toISOString() });

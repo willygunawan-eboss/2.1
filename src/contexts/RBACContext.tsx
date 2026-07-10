@@ -4,6 +4,7 @@ export interface RBACData {
   roles: string[];
   permissions: string[];
   menus: string[];
+  modules?: string[];
 }
 
 interface RBACContextType {
@@ -50,20 +51,24 @@ export function RBACProvider({ children }: { children: React.ReactNode }) {
 
   const hasPermission = (perm: string) => {
     if (!rbac) return false;
-    if (rbac.roles.includes('System Admin')) return true;
+    if (rbac.roles.includes('SUPER_ADMIN')) return true;
     return rbac.permissions.includes(perm);
   };
 
   const hasRole = (role: string) => {
     if (!rbac) return false;
-    if (rbac.roles.includes('System Admin')) return true;
+    if (rbac.roles.includes('SUPER_ADMIN')) return true;
     return rbac.roles.includes(role);
   };
 
   const hasMenu = (menu: string) => {
     if (!rbac) return false;
-    if (rbac.roles.includes('System Admin')) return true;
-    // Map module ids to Menu names
+    if (rbac.roles.includes('SUPER_ADMIN')) return true;
+    
+    // Also check if module is accessible via permissions
+    // modules array was added to RBACData
+    const hasModuleAccess = rbac.modules?.includes(menu.toLowerCase());
+    
     const menuMap: Record<string, string> = {
       'dashboard': 'Dashboard',
       'crm': 'CRM',
@@ -81,7 +86,7 @@ export function RBACProvider({ children }: { children: React.ReactNode }) {
       'settings': 'Settings'
     };
     const menuName = menuMap[menu] || menu;
-    return rbac.menus.includes(menuName);
+    return rbac.menus.includes(menuName) || hasModuleAccess;
   };
 
   return (

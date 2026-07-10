@@ -152,6 +152,7 @@ router.get('/context', (req, res) => {
     data: {
       roles: getUserRoles(user.id),
       permissions: getUserPermissions(user.id),
+      modules: [...new Set(getUserPermissions(user.id).map((p: string) => p.split('_')[1]?.toLowerCase()).filter(Boolean))],
       menus: getUserMenus(user.id),
       // To get scopes properly, we'd need to send all of them or fetch per module, 
       // let's just return the scopes object if we export it, but for now we'll rely on the backend.
