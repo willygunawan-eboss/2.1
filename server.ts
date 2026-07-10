@@ -28,10 +28,14 @@ import { mockEmployees, mockAttendance, mockPayroll, mockTransactions, mockSales
 import { runMigrations, getDbPath } from './src/db/index.js';
 import { runSeeder } from './src/db/seeder.js';
 
-import { createRequire } from 'module';
-const customRequire = createRequire(import.meta.url);
-const pkg = customRequire('./package.json');
-const APP_VERSION = pkg.version || '1.0.0';
+
+let APP_VERSION = '1.0.0';
+try {
+  const pkgContent = fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8');
+  APP_VERSION = JSON.parse(pkgContent).version || '1.0.0';
+} catch(e) {
+}
+
 
 
 async function startServer() {
