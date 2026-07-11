@@ -25,6 +25,7 @@ import { ModuleId } from './types';
 function MainApp() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [systemReady, setSystemReady] = useState<boolean>(true);
+  const [userRole, setUserRole] = useState<string>("");
   const [isInitializing, setIsInitializing] = useState(true);
   const [activeModule, setActiveModule] = useState<ModuleId>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -39,11 +40,12 @@ function MainApp() {
           const data = await res.json();
           if (data.success) {
             setIsAuthenticated(true);
-            const healthRes = await fetch('/api/system/health');
+            setUserRole(data.user?.role || "");
+            const healthRes = await fetch('/api/bootstrap/status');
             if (healthRes.ok) {
               const healthData = await healthRes.json();
               if (healthData.success) {
-                setSystemReady(healthData.data.systemReady);
+                setSystemReady(healthData.data.erpReady);
               }
             }
           } else {
@@ -87,7 +89,23 @@ function MainApp() {
   }
   
   if (!systemReady) {
-    return <BootstrapWizard onComplete={() => setSystemReady(true)} />;
+    if (userRole === 'SUPER_ADMIN') {
+      return <BootstrapWizard onComplete={() => setSystemReady(true)} />;
+    } else {
+      return (
+        <div className="flex flex-col items-center justify-center h-screen bg-slate-50 font-sans text-center px-4">
+          <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mb-6">
+            <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h1 className="text-2xl font-bold text-slate-900 mb-2">System Under Initialization</h1>
+          <p className="text-slate-600 max-w-md">
+            The ERP system is currently being set up by the administrator. Please check back later.
+          </p>
+        </div>
+      );
+    }
   }
 
   

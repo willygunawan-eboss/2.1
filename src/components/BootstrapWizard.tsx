@@ -1,44 +1,103 @@
 import React, { useState, useEffect } from 'react';
+import { Building2, MapPin, Users, Briefcase, CheckCircle2, AlertCircle, ChevronRight, ChevronLeft, RefreshCcw, FileText } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Building2, Users, Briefcase, Key, Database, ShieldCheck, 
-  MapPin, CheckCircle2, AlertCircle, ChevronRight, ChevronLeft 
-} from 'lucide-react';
 
-interface BootstrapWizardProps {
-  onComplete: () => void;
+const steps = [
+  { id: 1, title: 'Company', icon: Building2, desc: 'Setup your primary organization', path: 'companies' },
+  { id: 2, title: 'Branch', icon: MapPin, desc: 'Add your first branch or HQ', path: 'branches' },
+  { id: 3, title: 'Department', icon: Users, desc: 'Create your main department', path: 'departments' },
+  { id: 4, title: 'Position', icon: Briefcase, desc: 'Add a job position', path: 'positions' },
+  { id: 5, title: 'Employee', icon: Users, desc: 'Register your first employee', path: 'employees' },
+  { id: 6, title: 'Readiness', icon: CheckCircle2, desc: 'System verification', path: 'verify' }
+];
+
+// Error Boundary Component for the Wizard
+class WizardErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null, errorInfo: null, logId: "" };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("Bootstrap Error:", error, errorInfo);
+    this.setState({ errorInfo, logId: `ERR-${Math.random().toString(36).substr(2, 9).toUpperCase()}` });
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 font-sans">
+          <div className="bg-white p-8 rounded-2xl shadow-lg max-w-lg w-full border border-red-100">
+            <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mb-6">
+              <AlertCircle className="w-8 h-8" />
+            </div>
+            <h1 className="text-2xl font-bold text-slate-900 mb-2">Bootstrap Execution Error</h1>
+            <p className="text-slate-600 mb-4">An unexpected error occurred in the orchestration layer.</p>
+            <div className="bg-slate-100 p-4 rounded-lg text-sm text-red-600 font-mono overflow-auto mb-6 max-h-40">
+              <p className="font-bold mb-1">Log ID: {this.state.logId}</p>
+              {this.state.error?.toString()}
+            </div>
+            <div className="flex gap-4">
+              <button onClick={() => window.location.reload()} className="flex-1 bg-slate-900 hover:bg-slate-800 text-white py-2.5 rounded-lg font-medium flex justify-center items-center gap-2 transition-colors">
+                <RefreshCcw className="w-4 h-4" /> Retry Bootstrap
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
-export function BootstrapWizard({ onComplete }: BootstrapWizardProps) {
+function BootstrapWizardContent({ onComplete }: { onComplete: () => void }) {
   const [currentStep, setCurrentStep] = useState(1);
-  const [healthData, setHealthData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [formError, setFormError] = useState("");
-
-  const steps = [
-    { id: 1, title: 'Company', icon: Building2, desc: 'Setup your primary organization' },
-    { id: 2, title: 'Branch', icon: MapPin, desc: 'Add your first branch or HQ' },
-    { id: 3, title: 'Department', icon: Users, desc: 'Create your main department' },
-    { id: 4, title: 'Position', icon: Briefcase, desc: 'Add a job position' },
-    { id: 5, title: 'Employee', icon: Users, desc: 'Register your first employee' },
-    { id: 6, title: 'Readiness', icon: ShieldCheck, desc: 'System verification' }
-  ];
+  const [healthData, setHealthData] = useState<any>(null);
+  const [orgState, setOrgState] = useState<Record<string, string>>({});
+  const [prerequisites, setPrerequisites] = useState<{ divisionId?: string, jobGradeId?: string }>({});
 
   const fetchHealth = async () => {
     try {
-      const res = await fetch('/api/system/health');
+      const res = await fetch('/api/bootstrap/status');
       if (res.ok) {
         const data = await res.json();
         setHealthData(data.data);
-        if (data.data.systemReady) {
+        if (data.data.erpReady) {
           onComplete();
         }
       }
-    } catch (e) {}
+    } catch (e) {
+      console.error("Failed to fetch bootstrap status", e);
+    }
+  };
+
+  const checkPrerequisites = async () => {
+    try {
+      const [divRes, jgRes] = await Promise.all([
+        fetch('/api/org/divisions?limit=1'),
+        fetch('/api/org/job-grades?limit=1')
+      ]);
+      const divData = await divRes.json();
+      const jgData = await jgRes.json();
+      
+      setPrerequisites({
+        divisionId: divData.data?.[0]?.id,
+        jobGradeId: jgData.data?.[0]?.id
+      });
+    } catch (e) {
+      console.error("Failed to fetch prerequisites", e);
+    }
   };
 
   useEffect(() => {
     fetchHealth();
+    checkPrerequisites();
   }, []);
 
   const handleNext = async (e: React.FormEvent) => {
@@ -46,22 +105,67 @@ export function BootstrapWizard({ onComplete }: BootstrapWizardProps) {
     setFormError("");
     setIsLoading(true);
 
-    const formData = new FormData(e.target as HTMLFormElement);
-    const data = Object.fromEntries(formData.entries());
-    
     try {
-        const res = await fetch('/api/system/bootstrap', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ step: currentStep, data })
-        });
-        const resData = await res.json();
-        if (!res.ok || !resData.success) throw new Error(resData.message || "Failed to save");
+      const formData = new FormData(e.target as HTMLFormElement);
+      const data = Object.fromEntries(formData.entries());
       
-        await fetchHealth();
-        setCurrentStep(prev => Math.min(prev + 1, steps.length));
+      const stepConfig = steps[currentStep - 1];
+      let endpoint = `/api/org/${stepConfig.path}`;
+      let payload: any = { ...data };
+
+      // Dependency Injection Layer
+      if (currentStep === 2) { // Branch
+        if (!orgState.companyId) throw new Error("Dependency Error: Company ID is missing from previous step.");
+        payload.companyId = orgState.companyId;
+      } else if (currentStep === 3) { // Department
+        if (!prerequisites.divisionId) throw new Error("Reference Error: Master Division belum tersedia. Pastikan seeder telah berjalan.");
+        payload.divisionId = prerequisites.divisionId;
+      } else if (currentStep === 4) { // Position
+        if (!orgState.departmentId) throw new Error("Dependency Error: Department ID is missing.");
+        if (!prerequisites.jobGradeId) throw new Error("Reference Error: Master Job Grade belum tersedia.");
+        payload.departmentId = orgState.departmentId;
+        payload.jobGradeId = prerequisites.jobGradeId;
+      } else if (currentStep === 5) { // Employee
+        if (!orgState.companyId || !orgState.branchId || !orgState.departmentId || !orgState.positionId) {
+           throw new Error("Dependency Error: Required organizational elements are missing. Ensure all previous steps completed.");
+        }
+        payload.companyId = orgState.companyId;
+        payload.branchId = orgState.branchId;
+        payload.departmentId = orgState.departmentId;
+        payload.positionId = orgState.positionId;
+        // Default values for employee missing from simple form
+        payload.status = 'Active';
+      }
+
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const resData = await res.json();
+      
+      if (!res.ok || !resData.success) {
+         // Standardize error message from REST API validation
+         let errorMsg = resData.message || "Failed to save data.";
+         if (resData.error && Array.isArray(resData.error)) {
+             errorMsg = resData.error.map((e: any) => e.message).join(", ");
+         } else if (resData.error) {
+             errorMsg = resData.error;
+         }
+         throw new Error(errorMsg);
+      }
+      
+      // Store IDs for orchestration
+      if (currentStep === 1) setOrgState(prev => ({ ...prev, companyId: resData.data?.id || resData.id }));
+      if (currentStep === 2) setOrgState(prev => ({ ...prev, branchId: resData.data?.id || resData.id }));
+      if (currentStep === 3) setOrgState(prev => ({ ...prev, departmentId: resData.data?.id || resData.id }));
+      if (currentStep === 4) setOrgState(prev => ({ ...prev, positionId: resData.data?.id || resData.id }));
+
+      await fetchHealth();
+      setCurrentStep(prev => Math.min(prev + 1, steps.length));
     } catch (err: any) {
-      setFormError(err.message || "An error occurred");
+      setFormError(err.message || "An orchestration error occurred");
     } finally {
       setIsLoading(false);
     }
@@ -150,24 +254,41 @@ export function BootstrapWizard({ onComplete }: BootstrapWizardProps) {
                 <CheckCircle2 className="w-8 h-8" />
               </div>
               <h3 className="text-xl font-bold text-slate-800">System Ready!</h3>
-              <p className="text-slate-500 mt-2">All master data has been initialized.</p>
+              <p className="text-slate-500 mt-2">Bootstrap Orchestration successfully initialized master data.</p>
             </div>
             <div className="bg-slate-50 p-4 rounded-xl space-y-3">
-               <div className="flex justify-between text-sm">
+               <div className="flex justify-between text-sm border-b border-slate-200 pb-2">
                  <span className="text-slate-600">Organization Data</span>
-                 <span className="text-green-600 font-medium">{healthData?.status?.organization}</span>
+                 <span className={healthData?.organizationReady ? "text-green-600 font-medium" : "text-amber-600 font-medium"}>
+                   {healthData?.organizationReady ? 'Ready' : 'Pending'}
+                 </span>
+               </div>
+               <div className="flex justify-between text-sm border-b border-slate-200 pb-2">
+                 <span className="text-slate-600">HR Data</span>
+                 <span className={healthData?.employeeReady ? "text-green-600 font-medium" : "text-amber-600 font-medium"}>
+                   {healthData?.employeeReady ? 'Ready' : 'Pending'}
+                 </span>
+               </div>
+               <div className="flex justify-between text-sm border-b border-slate-200 pb-2">
+                 <span className="text-slate-600">Reference Engine</span>
+                 <span className={healthData?.referenceReady ? "text-green-600 font-medium" : "text-amber-600 font-medium"}>
+                   {healthData?.referenceReady ? 'Ready' : 'Pending'}
+                 </span>
                </div>
                <div className="flex justify-between text-sm">
-                 <span className="text-slate-600">HR Data</span>
-                 <span className="text-green-600 font-medium">{healthData?.status?.hr}</span>
+                 <span className="text-slate-600">RBAC Engine</span>
+                 <span className={healthData?.rbacReady ? "text-green-600 font-medium" : "text-amber-600 font-medium"}>
+                   {healthData?.rbacReady ? 'Ready' : 'Pending'}
+                 </span>
                </div>
             </div>
             <button
               type="button"
               onClick={onComplete}
-              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl transition-colors"
+              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl transition-colors flex justify-center items-center gap-2"
             >
               Enter Workspace
+              <ChevronRight className="w-4 h-4" />
             </button>
           </div>
         );
@@ -182,7 +303,7 @@ export function BootstrapWizard({ onComplete }: BootstrapWizardProps) {
         <div className="lg:col-span-4 space-y-6">
           <div>
             <h1 className="text-2xl font-bold text-slate-900 mb-2">System Bootstrap</h1>
-            <p className="text-slate-500">Initialize your ERP workspace</p>
+            <p className="text-slate-500 text-sm">Orchestration Layer initializing your ERP workspace components sequentially.</p>
           </div>
           
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
@@ -214,12 +335,12 @@ export function BootstrapWizard({ onComplete }: BootstrapWizardProps) {
               <div className="mt-8 pt-6 border-t border-slate-100">
                 <div className="flex items-center justify-between text-sm mb-2">
                   <span className="font-medium text-slate-700">Setup Progress</span>
-                  <span className="text-blue-600 font-bold">{healthData.progress}%</span>
+                  <span className="text-blue-600 font-bold">{healthData.progress || 0}%</span>
                 </div>
                 <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
                   <div 
-                    className="h-full bg-blue-600 transition-all duration-1000" 
-                    style={{ width: `${healthData.progress}%` }} 
+                    className="h-full bg-blue-600 transition-all duration-1000"
+                    style={{ width: `${healthData.progress || 0}%` }} 
                   />
                 </div>
               </div>
@@ -238,9 +359,12 @@ export function BootstrapWizard({ onComplete }: BootstrapWizardProps) {
             
             <div className="p-6 sm:p-8 flex-1">
               {formError && (
-                <div className="mb-6 p-4 bg-red-50 border border-red-100 text-red-600 rounded-xl flex gap-3 text-sm">
+                <div className="mb-6 p-4 bg-red-50 border border-red-100 text-red-700 rounded-xl flex gap-3 text-sm">
                   <AlertCircle className="w-5 h-5 shrink-0" />
-                  <p>{formError}</p>
+                  <div className="flex-1">
+                     <p className="font-bold mb-1">Validation Error</p>
+                     <p>{formError}</p>
+                  </div>
                 </div>
               )}
               
@@ -284,8 +408,15 @@ export function BootstrapWizard({ onComplete }: BootstrapWizardProps) {
             )}
           </div>
         </div>
-
       </div>
     </div>
+  );
+}
+
+export function BootstrapWizard({ onComplete }: { onComplete: () => void }) {
+  return (
+    <WizardErrorBoundary>
+      <BootstrapWizardContent onComplete={onComplete} />
+    </WizardErrorBoundary>
   );
 }
